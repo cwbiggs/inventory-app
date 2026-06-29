@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<title>Inventory Voice App</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f3; --surface: #ffffff; --surface2: #f0efeb;
+    --border: rgba(0,0,0,0.1); --border-strong: rgba(0,0,0,0.18);
+    --text: #1a1a18; --text2: #5a5a56; --text3: #8a8a85;
+    --accent: #1a6fd4; --accent-bg: #e6f1fb; --accent-border: #b5d4f4;
+    --success: #2d7a2d; --success-bg: #eaf3de; --success-border: #c0dd97;
+    --danger: #a32d2d; --danger-bg: #fcebeb; --danger-border: #f7c1c1;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18; --surface: #2a2a27; --surface2: #222220;
+      --border: rgba(255,255,255,0.1); --border-strong: rgba(255,255,255,0.18);
+      --text: #f0efeb; --text2: #a8a8a3; --text3: #6a6a65;
+      --accent: #5ba3f5; --accent-bg: #0c1e35; --accent-border: #1a3a60;
+      --success: #7dc87d; --success-bg: #0d2010; --success-border: #1a4020;
+      --danger: #f09595; --danger-bg: #2a0c0c; --danger-border: #4a1515;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .app { max-width: 680px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.5rem; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+  .card-label { font-size: 12px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; margin-bottom: 10px; }
+  label { font-size: 12px; color: var(--text3); display: block; margin-bottom: 4px; margin-top: 8px; }
+  label:first-of-type { margin-top: 0; }
+  input[type=text] { width: 100%; font-size: 14px; padding: 8px 10px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface2); color: var(--text); outline: none; }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,111,212,0.15); }
+  .mode-tabs { display: flex; gap: 6px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .mode-tab { padding: 7px 14px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text2); font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .mode-tab.active { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); font-weight: 500; }
+  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 2rem 1.5rem; }
+  .mic-btn { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn.listening { border-color: #e24b4a; background: var(--danger-bg); animation: pulse 1.2s infinite; }
+  .mic-btn.listening svg { stroke: #e24b4a; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(226,75,74,0.3)} 50%{box-shadow:0 0 0 12px rgba(226,75,74,0)} }
+  .mic-btn svg { width: 30px; height: 30px; stroke: var(--text2); stroke-width: 2; fill: none; }
+  .transcript-box { width: 100%; min-height: 52px; background: var(--surface2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 14px; color: var(--text); font-style: italic; line-height: 1.5; }
+  .status-line { font-size: 13px; color: var(--text3); }
+  .status-line.active { color: var(--accent); }
+  .status-line.error { color: var(--danger); }
+  .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin-bottom: 12px; }
+  .field-row { display: flex; flex-direction: column; gap: 2px; }
+  .field-label { font-size: 11px; color: var(--text3); }
+  .field-value { font-size: 14px; color: var(--text); }
+  .field-value.empty { color: var(--text3); font-style: italic; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; }
+  .badge.yes { background: var(--success-bg); color: var(--success); border: 0.5px solid var(--success-border); }
+  .badge.no { background: var(--surface2); color: var(--text3); border: 0.5px solid var(--border); }
+  .action-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; -webkit-tap-highlight-color: transparent; }
+  .btn:active { transform: scale(0.97); }
+  .btn.primary { background: var(--accent-bg); border-color: var(--accent-border); color: var(--accent); font-weight: 500; }
+  .btn.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger); }
+  .btn.google { background: var(--surface); border-color: var(--border-strong); gap: 10px; font-size: 15px; padding: 10px 20px; }
+  .alert { border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; font-size: 14px; display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+  .alert.success { background: var(--success-bg); border: 0.5px solid var(--success-border); color: var(--success); }
+  .alert.info { background: var(--accent-bg); border: 0.5px solid var(--accent-border); color: var(--accent); }
+  .alert.error-alert { background: var(--danger-bg); border: 0.5px solid var(--danger-border); color: var(--danger); }
+  .signin-panel { text-align: center; padding: 2.5rem 1rem; }
+  .signin-panel h2 { font-size: 18px; font-weight: 500; margin-bottom: 8px; }
+  .signin-panel p { font-size: 14px; color: var(--text2); margin-bottom: 1.5rem; line-height: 1.6; }
+  .user-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; margin-bottom: 1rem; }
+  .user-bar span { font-size: 13px; color: var(--text2); }
+  .cheat-section { margin-bottom: 1rem; }
+  .cheat-section h3 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 8px; }
+  .cheat-item { margin-bottom: 10px; }
+  .cheat-item .clabel { font-size: 11px; color: var(--text3); margin-bottom: 3px; }
+  .cheat-item code { font-family: 'Menlo','Courier New',monospace; font-size: 12px; background: var(--surface2); border: 0.5px solid var(--border); border-radius: 4px; padding: 6px 10px; display: block; color: var(--text); line-height: 1.7; }
+  .log { font-size: 12px; color: var(--text3); border-top: 0.5px solid var(--border); padding-top: 0.75rem; margin-top: 0.5rem; max-height: 90px; overflow-y: auto; }
+  .log div { padding: 2px 0; }
+  @media (max-width: 480px) { .fields-grid { grid-template-columns: 1fr; } .mode-tab { font-size: 12px; padding: 6px 10px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+    <h1>Inventory voice app</h1>
+  </div>
+
+  <!-- Sign-in panel -->
+  <div id="signin-panel" class="card signin-panel">
+    <h2>Sign in to get started</h2>
+    <p>Sign in with the Google account that has access to your inventory spreadsheet. This allows the app to read and write your sheet.</p>
+    <button class="btn google" onclick="signIn()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 6.293C4.672 4.166 6.656 3.58 9 3.58z"/></svg>
+      Sign in with Google
+    </button>
+  </div>
+
+  <!-- Main app (hidden until signed in) -->
+  <div id="main-app" style="display:none">
+    <div class="user-bar">
+      <span id="user-name">Signed in</span>
+      <button class="btn" onclick="signOut()" style="font-size:12px;padding:5px 12px">Sign out</button>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-label">Spreadsheet</div>
+      <label>Spreadsheet ID</label>
+      <input type="text" id="sheet-id" value="1EKlpLrnIhQ-FsL8OSOeA_ni_9TX_OsXUhCyK6g_thUI" />
+      <label>Sheet tab name</label>
+      <input type="text" id="sheet-tab" value="master inventory" />
+    </div>
+
+    <div class="mode-tabs">
+      <button class="mode-tab active" onclick="setMode('add')" id="tab-add">+ Add item</button>
+      <button class="mode-tab" onclick="setMode('update')" id="tab-update">✎ Update item</button>
+      <button class="mode-tab" onclick="setMode('query')" id="tab-query">⌕ Query</button>
+      <button class="mode-tab" onclick="setMode('help')" id="tab-help">? Voice guide</button>
+    </div>
+
+    <div id="help-panel" style="display:none">
+      <div class="card">
+        <div class="cheat-section">
+          <h3>Add item</h3>
+          <div class="cheat-item"><div class="clabel">Full example</div><code>Room D2002, location cabinet 2, item Dell monitor, category electronics, quantity 3, accessories power cable, notes near window, checked out no, needs repair yes, send to surplus no</code></div>
+          <div class="cheat-item"><div class="clabel">Minimal</div><code>Room D2002, location cabinet 2, item Dell monitor, quantity 1</code></div>
+        </div>
+        <div class="cheat-section">
+          <h3>Update item</h3>
+          <div class="cheat-item"><div class="clabel">Change a field</div><code>Update room D2002 location cabinet 2 item Dell monitor, set quantity 5</code></div>
+          <div class="cheat-item"><div class="clabel">Check out an item</div><code>Update room D2002 location cabinet 2 item Dell monitor, set checked out yes, checked out by John Smith, date checked out June 29 2026</code></div>
+          <div class="cheat-item"><div class="clabel">Mark for surplus</div><code>Update room D2002 location cabinet 2 item Dell monitor, set send to surplus yes</code></div>
+        </div>
+        <div class="cheat-section">
+          <h3>Query</h3>
+          <div class="cheat-item"><div class="clabel">Check existence</div><code>Is there a Dell monitor in room D2002 cabinet 2</code></div>
+          <div class="cheat-item"><div class="clabel">Count</div><code>How many Dell monitors are in room D2002 cabinet 2</code></div>
+          <div class="cheat-item"><div class="clabel">List a room</div><code>What items are in room D2002</code></div>
+          <div class="cheat-item"><div class="clabel">Check a field</div><code>Is the Dell monitor in room D2002 cabinet 2 checked out</code></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="voice-panel">
+      <div class="card mic-area">
+        <button class="mic-btn" id="mic-btn" onclick="toggleListen()" aria-label="Start recording">
+          <svg id="mic-svg" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+        </button>
+        <div class="transcript-box" id="transcript">Tap the mic and speak your command…</div>
+        <div class="status-line" id="status-line">Ready — tap mic to begin</div>
+      </div>
+      <div id="result-area"></div>
+    </div>
+  </div>
+
+  <div class="log" id="log"></div>
+</div>
+
+<script>
+const CLIENT_ID = '153702644438-bfg91407qsqsiqh4q8p0kjp6jo607e3c.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const FIELDS = ['Room','Location in room','Item name','Category','Quantity','Accessories','Notes','Checked out','Date checked out','Checked out by','Needs repair','Send to surplus/sell'];
+const YES_NO = ['Checked out','Needs repair','Send to surplus/sell'];
+
+let accessToken = null;
+let tokenClient = null;
+let mode = 'add';
+let recognition = null;
+let listening = false;
+
+function sid() { return document.getElementById('sheet-id').value.trim(); }
+function stab() { return document.getElementById('sheet-tab').value.trim(); }
+function enc(s) { return encodeURIComponent(s); }
+function norm(s) { return (s||'').toLowerCase().trim(); }
+
+// ── Auth ──────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // wait for GSI to load
+  const interval = setInterval(() => {
+    if (window.google && window.google.accounts) {
+      clearInterval(interval);
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (resp) => {
+          if (resp.error) { showAlert('Sign-in failed: '+resp.error, 'error-alert'); return; }
+          accessToken = resp.access_token;
+          document.getElementById('signin-panel').style.display = 'none';
+          document.getElementById('main-app').style.display = 'block';
+        }
+      });
+    }
+  }, 200);
+});
+
+function signIn() {
+  if (!tokenClient) { showAlert('Google sign-in is still loading. Please wait a moment and try again.', 'error-alert'); return; }
+  tokenClient.requestAccessToken();
+}
+
+function signOut() {
+  if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+  accessToken = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('signin-panel').style.display = 'block';
+}
+
+// ── Mode ──────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  ['add','update','query','help'].forEach(t => document.getElementById('tab-'+t).classList.toggle('active', t===m));
+  document.getElementById('help-panel').style.display = m==='help' ? 'block' : 'none';
+  document.getElementById('voice-panel').style.display = m==='help' ? 'none' : 'block';
+  const hints = {
+    add: 'Say: Room D2002, location cabinet 2, item Dell monitor, quantity 3…',
+    update: 'Say: Update room D2002 location cabinet 2 item Dell monitor, set quantity 5…',
+    query: 'Ask: How many Dell monitors are in room D2002 cabinet 2?'
+  };
+  if (hints[m]) document.getElementById('transcript').textContent = hints[m];
+  document.getElementById('result-area').innerHTML = '';
+}
+
+// ── Logging / status ──────────────────────────────────────────────────
+function logMsg(msg) {
+  const d = document.createElement('div');
+  d.textContent = new Date().toLocaleTimeString() + ' — ' + msg;
+  document.getElementById('log').prepend(d);
+}
+function setStatus(msg, type='') {
+  const el = document.getElementById('status-line');
+  el.textContent = msg;
+  el.className = 'status-line' + (type ? ' '+type : '');
+}
+function showAlert(msg, type='success') {
+  const icons = { success:'✓', info:'ℹ', 'error-alert':'✕' };
+  document.getElementById('result-area').innerHTML = `<div class="alert ${type}">${icons[type]||'•'} ${msg}</div>`;
+}
+
+// ── Mic ───────────────────────────────────────────────────────────────
+const MIC_ON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="30" height="30"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>`;
+const MIC_OFF = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="30" height="30"><line x1="2" y1="2" x2="22" y2="22"/><path d="M18.89 13.23A7 7 0 0 0 19 12"/><path d="M5 10a7 7 0 0 0 11.29 5.65"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/></svg>`;
+
+function toggleListen() { listening ? stopListen() : startListen(); }
+
+function startListen() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setStatus('Use Chrome or Edge for speech recognition.','error'); return; }
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+  recognition.onstart = () => {
+    listening = true;
+    document.getElementById('mic-btn').classList.add('listening');
+    document.getElementById('mic-btn').innerHTML = MIC_OFF;
+    setStatus('Listening…','active');
+    document.getElementById('transcript').textContent = '';
+  };
+  recognition.onresult = (e) => {
+    let t = '';
+    for (let i=0;i<e.results.length;i++) t += e.results[i][0].transcript;
+    document.getElementById('transcript').textContent = t;
+  };
+  recognition.onend = () => {
+    listening = false;
+    document.getElementById('mic-btn').classList.remove('listening');
+    document.getElementById('mic-btn').innerHTML = MIC_ON;
+    const text = document.getElementById('transcript').textContent.trim();
+    if (text) { setStatus('Parsing…','active'); parseAndProcess(text); }
+    else setStatus('Nothing heard. Try again.');
+  };
+  recognition.onerror = (e) => {
+    setStatus('Mic error: '+e.error,'error');
+    listening = false;
+    document.getElementById('mic-btn').classList.remove('listening');
+    document.getElementById('mic-btn').innerHTML = MIC_ON;
+  };
+  recognition.start();
+}
+function stopListen() { if (recognition) recognition.stop(); }
+
+// ── Parsers ───────────────────────────────────────────────────────────
+function parseYesNo(s) {
+  const n = norm(s);
+  if (['yes','y','true','1','yep','yeah'].includes(n)) return 'Yes';
+  if (['no','n','false','0','nope'].includes(n)) return 'No';
+  return null;
+}
+
+function parseAdd(text) {
+  const data = {};
+  const patterns = [
+    [/\broom\s+([a-z0-9\-]+)/i, 'Room'],
+    [/\blocation\s+(.+?)(?=,\s*(?:item|category|quantity|accessories|notes|checked|needs|send|$))/i, 'Location in room'],
+    [/\bitem\s+(.+?)(?=,\s*(?:location|category|quantity|accessories|notes|checked|needs|send|$))/i, 'Item name'],
+    [/\bcategory\s+(.+?)(?=,\s*(?:item|location|quantity|accessories|notes|checked|needs|send|$))/i, 'Category'],
+    [/\bquantity\s+(\d+)/i, 'Quantity'],
+    [/\baccessories\s+(.+?)(?=,\s*(?:item|location|category|quantity|notes|checked|needs|send|$))/i, 'Accessories'],
+    [/\bnotes?\s+(.+?)(?=,\s*(?:item|location|category|quantity|accessories|checked|needs|send|$))/i, 'Notes'],
+    [/\bchecked\s+out\s+(yes|no|y|n)\b/i, 'Checked out'],
+    [/\bdate\s+checked\s+out\s+(.+?)(?=,\s*(?:checked out by|needs|send|$))/i, 'Date checked out'],
+    [/\bchecked\s+out\s+by\s+(.+?)(?=,\s*(?:needs|send|date|$))/i, 'Checked out by'],
+    [/\bneeds?\s+repair\s+(yes|no|y|n)\b/i, 'Needs repair'],
+    [/\bsend\s+to\s+surplus(?:\/sell|sell)?\s+(yes|no|y|n)\b/i, 'Send to surplus/sell'],
+  ];
+  patterns.forEach(([rx, field]) => {
+    const m = text.match(rx);
+    if (m) {
+      let val = m[1].trim().replace(/,\s*$/,'');
+      if (YES_NO.includes(field)) val = parseYesNo(val) || val;
+      data[field] = val;
+    }
+  });
+  return data;
+}
+
+function parseUpdate(text) {
+  const find = {}, update = {};
+  const rm = text.match(/\broom\s+([a-z0-9\-]+)/i);
+  const lm = text.match(/\blocation\s+(.+?)(?=\s+item\b)/i);
+  const im = text.match(/\bitem\s+(.+?)(?=,\s*set\b)/i);
+  if (rm) find['Room'] = rm[1].trim();
+  if (lm) find['Location in room'] = lm[1].trim();
+  if (im) find['Item name'] = im[1].trim();
+  const setPart = text.match(/\bset\s+(.+)$/i);
+  if (setPart) {
+    const sets = setPart[1];
+    [
+      [/\bquantity\s+(\d+)/i, 'Quantity'],
+      [/\bcategory\s+(.+?)(?=,\s*(?:quantity|accessories|notes|checked|needs|send|$))/i, 'Category'],
+      [/\baccessories\s+(.+?)(?=,\s*(?:quantity|category|notes|checked|needs|send|$))/i, 'Accessories'],
+      [/\bnotes?\s+(.+?)(?=,\s*(?:quantity|category|accessories|checked|needs|send|$))/i, 'Notes'],
+      [/\bchecked\s+out\s+(yes|no|y|n)\b/i, 'Checked out'],
+      [/\bdate\s+checked\s+out\s+(.+?)(?=,|$)/i, 'Date checked out'],
+      [/\bchecked\s+out\s+by\s+(.+?)(?=,|$)/i, 'Checked out by'],
+      [/\bneeds?\s+repair\s+(yes|no|y|n)\b/i, 'Needs repair'],
+      [/\bsend\s+to\s+surplus(?:\/sell|sell)?\s+(yes|no|y|n)\b/i, 'Send to surplus/sell'],
+      [/\broom\s+([a-z0-9\-]+)/i, 'Room'],
+      [/\blocation\s+(.+?)(?=,|$)/i, 'Location in room'],
+      [/\bitem\s+(.+?)(?=,|$)/i, 'Item name'],
+    ].forEach(([rx, field]) => {
+      const m = sets.match(rx);
+      if (m) {
+        let val = m[1].trim().replace(/,\s*$/,'');
+        if (YES_NO.includes(field)) val = parseYesNo(val) || val;
+        update[field] = val;
+      }
+    });
+  }
+  return { find, update };
+}
+
+function parseQuery(text) {
+  const q = { Room: null, 'Location in room': null, 'Item name': null, type: 'list', field: null };
+  const rm = text.match(/\broom\s+([a-z0-9\-]+)/i);
+  if (rm) q.Room = rm[1].trim();
+  const lm = text.match(/\b(?:in\s+|cabinet\s+|shelf\s+|location\s+)([a-z0-9 \-]+?)(?=\s*(?:,|is there|how many|what|$))/i);
+  if (lm) q['Location in room'] = lm[1].trim();
+  const itemMatch = text.match(/(?:how many|is there a?n?|is the)\s+(.+?)\s+in\s+/i);
+  if (itemMatch) q['Item name'] = itemMatch[1].trim();
+  if (/how many/i.test(text)) q.type = 'count';
+  else if (/is there/i.test(text)) q.type = 'existence';
+  else if (/what items|list items|show items/i.test(text)) q.type = 'list';
+  else if (/checked out/i.test(text)) { q.type='field'; q.field='Checked out'; }
+  else if (/needs repair/i.test(text)) { q.type='field'; q.field='Needs repair'; }
+  else if (/surplus/i.test(text)) { q.type='field'; q.field='Send to surplus/sell'; }
+  return q;
+}
+
+function parseAndProcess(text) {
+  if (mode==='add') {
+    const data = parseAdd(text);
+    if (!data['Item name'] && !data['Room']) {
+      setStatus('Could not parse. Check the voice guide.','error');
+      speak('Could not understand. Check the voice guide for the correct format.');
+      return;
+    }
+    showAddPreview(data);
+  } else if (mode==='update') {
+    const parsed = parseUpdate(text);
+    if (!parsed.find['Item name'] && !parsed.find['Room']) {
+      setStatus('Could not identify item to update.','error');
+      speak('Could not identify which item to update.');
+      return;
+    }
+    handleUpdate(parsed);
+  } else if (mode==='query') {
+    handleQuery(parseQuery(text));
+  }
+}
+
+// ── Preview ───────────────────────────────────────────────────────────
+function fieldDisplay(f, val) {
+  if (val===null||val===undefined||val==='') return '<span class="field-value empty">—</span>';
+  if (YES_NO.includes(f)) return `<span class="badge ${val==='Yes'?'yes':'no'}">${val}</span>`;
+  return `<span class="field-value">${val}</span>`;
+}
+
+function showAddPreview(data) {
+  const fields = FIELDS.map(f => `<div class="field-row"><span class="field-label">${f}</span>${fieldDisplay(f, data[f])}</div>`).join('');
+  const safe = encodeURIComponent(JSON.stringify(data));
+  document.getElementById('result-area').innerHTML = `
+    <div class="card">
+      <div class="card-label">New entry preview</div>
+      <div class="fields-grid">${fields}</div>
+      <div class="action-row">
+        <button class="btn primary" onclick="commitAdd('${safe}')">✓ Write to sheet</button>
+        <button class="btn danger" onclick="document.getElementById('result-area').innerHTML=''">✕ Discard</button>
+      </div>
+    </div>`;
+  setStatus('Review entry, then confirm or discard.');
+}
+
+// ── Sheets API ────────────────────────────────────────────────────────
+async function sheetsGet(range) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sid()}/values/${enc(range)}`;
+  const r = await fetch(url, { headers: { Authorization: 'Bearer '+accessToken } });
+  if (r.status===401) { accessToken=null; signOut(); throw new Error('Session expired. Please sign in again.'); }
+  if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Sheets read error'); }
+  return r.json();
+}
+
+async function sheetsPut(range, values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sid()}/values/${enc(range)}?valueInputOption=USER_ENTERED`;
+  const r = await fetch(url, { method:'PUT', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ values }) });
+  if (r.status===401) { accessToken=null; signOut(); throw new Error('Session expired. Please sign in again.'); }
+  if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Sheets write error'); }
+  return r.json();
+}
+
+async function sheetsAppend(values) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sid()}/values/${enc(stab())}:append?valueInputOption=USER_ENTERED`;
+  const r = await fetch(url, { method:'POST', headers:{ Authorization:'Bearer '+accessToken, 'Content-Type':'application/json' }, body: JSON.stringify({ values }) });
+  if (r.status===401) { accessToken=null; signOut(); throw new Error('Session expired. Please sign in again.'); }
+  if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||'Sheets append error'); }
+  return r.json();
+}
+
+async function ensureHeader() {
+  const data = await sheetsGet(`${stab()}!A1:L1`);
+  if (!data.values || !data.values[0] || data.values[0].length===0) {
+    await sheetsPut(`${stab()}!A1:L1`, [FIELDS]);
+  }
+}
+
+async function commitAdd(dataStr) {
+  const data = JSON.parse(decodeURIComponent(dataStr));
+  setStatus('Writing to Google Sheets…','active');
+  const row = FIELDS.map(f => data[f]===null||data[f]===undefined ? '' : String(data[f]));
+  try {
+    await ensureHeader();
+    await sheetsAppend([row]);
+    setStatus('Added to sheet!','active');
+    logMsg('Added: '+(data['Item name']||'?')+' in '+(data['Room']||'?'));
+    showAlert('Row added: '+(data['Item name']||'item')+' in '+(data['Room']||'unknown room'), 'success');
+    speak('Item added: '+(data['Item name']||'item')+' in room '+(data['Room']||'unknown'));
+  } catch(e) {
+    setStatus('Error: '+e.message,'error');
+    logMsg('Error: '+e.message);
+    showAlert(e.message,'error-alert');
+  }
+}
+
+async function handleUpdate(parsed) {
+  setStatus('Searching sheet…','active');
+  try {
+    const data = await sheetsGet(stab());
+    const rows = data.values || [];
+    if (rows.length < 2) { setStatus('No data in sheet yet.','error'); speak('The sheet has no data yet.'); return; }
+    const header = rows[0];
+    const find = parsed.find || {};
+    let matchIdx = -1;
+    for (let i=1;i<rows.length;i++) {
+      let match = true;
+      for (const [k,v] of Object.entries(find)) {
+        if (!v) continue;
+        const ci = header.indexOf(k);
+        if (ci<0 || norm(rows[i][ci]).indexOf(norm(v))<0) { match=false; break; }
+      }
+      if (match) { matchIdx=i; break; }
+    }
+    if (matchIdx<0) { setStatus('No matching item found.','error'); showAlert('No matching item found.','error-alert'); speak('No matching item found.'); return; }
+    const row = [...(rows[matchIdx]||[])];
+    while (row.length < FIELDS.length) row.push('');
+    for (const [k,v] of Object.entries(parsed.update||{})) {
+      const ci = header.indexOf(k);
+      if (ci>=0) row[ci] = v===null?'':String(v);
+    }
+    await sheetsPut(`${stab()}!A${matchIdx+1}:L${matchIdx+1}`, [row]);
+    setStatus('Item updated.','active');
+    logMsg('Updated row '+(matchIdx+1));
+    showAlert('Item updated in sheet.','success');
+    speak('Item updated successfully.');
+  } catch(e) {
+    setStatus('Error: '+e.message,'error');
+    logMsg('Update error: '+e.message);
+    showAlert(e.message,'error-alert');
+  }
+}
+
+async function handleQuery(parsed) {
+  setStatus('Querying sheet…','active');
+  try {
+    const data = await sheetsGet(stab());
+    const rows = data.values || [];
+    if (rows.length < 2) { speak('The sheet has no data yet.'); setStatus('No data.','error'); return; }
+    const header = rows[0];
+    const criteria = {};
+    if (parsed.Room) criteria['Room'] = parsed.Room;
+    if (parsed['Location in room']) criteria['Location in room'] = parsed['Location in room'];
+    if (parsed['Item name']) criteria['Item name'] = parsed['Item name'];
+    const matches = rows.slice(1).filter(row => {
+      for (const [k,v] of Object.entries(criteria)) {
+        if (!v) continue;
+        const ci = header.indexOf(k);
+        if (ci<0 || norm(row[ci]).indexOf(norm(v))<0) return false;
+      }
+      return true;
+    });
+    let answer = '';
+    if (parsed.type==='existence') {
+      answer = matches.length>0
+        ? `Yes, there ${matches.length===1?'is':'are'} ${matches.length} ${parsed['Item name']||'matching item'}${matches.length!==1?'s':''} in that location.`
+        : `No ${parsed['Item name']||'matching items'} found in that location.`;
+    } else if (parsed.type==='count') {
+      const total = matches.reduce((s,r)=>{ const ci=header.indexOf('Quantity'); return s+(parseInt(r[ci])||0); },0);
+      answer = `There ${total===1?'is':'are'} ${total} ${parsed['Item name']||'item'}${total!==1?'s':''} in that location.`;
+    } else if (parsed.type==='list') {
+      answer = matches.length===0 ? 'No items found in that location.'
+        : `Found ${matches.length} item${matches.length!==1?'s':''}: `+matches.map(r=>r[header.indexOf('Item name')]||'unknown').join(', ')+'.';
+    } else if (parsed.type==='field') {
+      if (matches.length===0) answer = 'No matching item found.';
+      else { const ci=header.indexOf(parsed.field); answer=(parsed.field||'That field')+' for '+(parsed['Item name']||'that item')+' is: '+(matches[0][ci]||'not set')+'.'; }
+    } else {
+      answer = matches.length===0 ? 'No matching items found.' : `Found ${matches.length} item${matches.length!==1?'s':''}.`;
+    }
+    showAlert(answer,'info');
+    speak(answer);
+    setStatus('Query complete.');
+    logMsg('Query: '+answer);
+  } catch(e) {
+    setStatus('Error: '+e.message,'error');
+    logMsg('Query error: '+e.message);
+    showAlert(e.message,'error-alert');
+  }
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.0;
+  window.speechSynthesis.speak(u);
+}
+</script>
+</body>
+</html>
